@@ -18,6 +18,7 @@
 package context
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -120,4 +121,28 @@ func setUpPoly(poly *poly_go_sdk.PolySdk) error {
 	}
 	poly.SetChainId(hdr.ChainID)
 	return nil
+}
+
+func ShouldHandleTx(ctx *Ctx, tx *CosmosTx) bool {
+	var logs []WithdrawalCosmosLog
+	log.Info("Tx Log: %#v\n", tx.Tx.TxResult.Log)
+	if err := json.Unmarshal([]byte(tx.Tx.TxResult.Log), &logs); err != nil {
+		// if cannot marshal then just process it normally without checking
+		log.Info("[ShouldHandleTx] Unable to unmarshal tx log, skipping check, err:", err)
+		return true
+	}
+
+	parsedTxn, err := parseWithdrawalTxn(logs)
+	if err != nil {
+		// if cannot parse just process it normally without checking
+		log.Info("[ShouldHandleTx] Unable to parse withdrawal txn, skipping check")
+		return true
+	}
+
+	//log.Info("parsedTxn", parsedTxn)
+	//log.Info("hasEnoughFees", parsedTxn.hasEnoughFees("", "swth1prv0t8j8tqcdngdmjlt59pwy6dxxmtqgycy2h7", 1))
+	//log.Info("isMatch", parsedTxn.isMatch("b5d4f343412dc8efb6ff599d790074d0f1e8d430", "swth1prv0t8j8tqcdngdmjlt59pwy6dxxmtqgycy2h7", "6"))
+
+	// TODO: modify this to hit min fee and don't hardcode fee address
+	return parsedTxn.hasEnoughFees("TODO", "swth1prv0t8j8tqcdngdmjlt59pwy6dxxmtqgycy2h7", 100)
 }

@@ -1,8 +1,14 @@
-<h1 align="center">COSMOS Relayer</h1>
+<h1 align="center">Switcheo COSMOS Relayer</h1>
 
 ## Introduction
 
 Cosmos Relayer is a common relayer for chains based on COSMOS-SDK. Cosmos Relayer will relay cross-chain transaction from and to Poly. It costs gas fee on side chain and relayer must have a poly wallet which is allowed to send transactions to poly.
+
+***This repo has been modified to filter cross chain txn that does not fit Switcheo's criteria***
+
+Current criteria
+- doesn't hit minimum fees for asset
+- not in a whitelisted fee address
 
 ## Build From Source
 

@@ -140,6 +140,13 @@ func handleCosmosHdrs(headers []*mcosmos.CosmosHeader) error {
 
 // Relay COSMOS cross-chain tx to polygon.
 func handleCosmosTx(tx *context.CosmosTx, hdr *mcosmos.CosmosHeader) {
+	if !context.ShouldHandleTx(ctx, tx) {
+		log.Info("[handleCosmosTx] skipping cosmos tx: ", tx.Tx.Hash)
+		return
+	}
+	// else continue
+	log.Info("[handleCosmosTx] handling cosmos tx: ", tx.Tx.Hash)
+
 	raw, err := ctx.CMCdc.MarshalBinaryBare(*hdr)
 	if err != nil {
 		panic(fmt.Errorf("failed to marshal cosmos header %s: %v", hdr.Commit.BlockID.Hash.String(), err))
