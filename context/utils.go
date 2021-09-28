@@ -139,10 +139,15 @@ func ShouldHandleTx(ctx *Ctx, tx *CosmosTx) bool {
 		return true
 	}
 
+	// allow zil to be 0
+	if parsedTxn.ToChainID == "18" {
+		return true
+	}
+
 	//log.Info("parsedTxn", parsedTxn)
 	//log.Info("hasEnoughFees", parsedTxn.hasEnoughFees("", "swth1prv0t8j8tqcdngdmjlt59pwy6dxxmtqgycy2h7", 1))
 	//log.Info("isMatch", parsedTxn.isMatch("b5d4f343412dc8efb6ff599d790074d0f1e8d430", "swth1prv0t8j8tqcdngdmjlt59pwy6dxxmtqgycy2h7", "6"))
-
+	//feeMinAmount := ctx.Conf.FeeMinAmount
 	// TODO: modify this to hit min fee and don't hardcode fee address
 	return parsedTxn.hasEnoughFees("TODO", "swth1prv0t8j8tqcdngdmjlt59pwy6dxxmtqgycy2h7", 100)
 }
