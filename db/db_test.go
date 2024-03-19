@@ -33,7 +33,7 @@ var (
 		Tx:     []byte{0},
 		Height: 100,
 		Index:  0,
-		TxResult: abcitypes.ResponseDeliverTx{
+		TxResult: abcitypes.ExecTxResult{
 			Log: "tx1",
 			Events: []abcitypes.Event{
 				abcitypes.Event{
