@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.22.0
 
 require (
-	github.com/Switcheo/polynetwork-cosmos v0.0.0-20240320071748-fc63ce0bf219
+	github.com/Switcheo/polynetwork-cosmos v0.0.0-20240320073208-0edf8f589db5
 	github.com/boltdb/bolt v1.3.1
 	github.com/cometbft/cometbft v0.38.5
 	github.com/cosmos/cosmos-sdk v0.51.0
