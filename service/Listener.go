@@ -34,8 +34,8 @@ import (
 	hscosmos "github.com/polynetwork/poly/native/service/header_sync/cosmos"
 	"github.com/polynetwork/poly/native/service/utils"
 
+	"github.com/cometbft/cometbft/crypto/merkle"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
-	"github.com/tendermint/tendermint/crypto/merkle"
 
 	ccmkeeper "github.com/Switcheo/polynetwork-cosmos/x/ccm/keeper"
 	headersynctypes "github.com/Switcheo/polynetwork-cosmos/x/headersync/types"

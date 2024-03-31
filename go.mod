@@ -13,7 +13,6 @@ require (
 	github.com/polynetwork/poly v0.0.0-20210629094731-3f755d4b4404
 	github.com/polynetwork/poly-go-sdk v0.0.0-20210114120411-3dcba035134f
 	github.com/stretchr/testify v1.9.0
-	github.com/tendermint/tendermint v0.34.11
 	google.golang.org/grpc v1.62.0
 )
 
@@ -171,6 +170,7 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20220721030215-126854af5e6d // indirect
 	github.com/tendermint/go-amino v0.16.0 // indirect
+	github.com/tendermint/tendermint v0.34.11 // indirect
 	github.com/tidwall/btree v1.7.0 // indirect
 	github.com/tyler-smith/go-bip39 v1.0.2 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
