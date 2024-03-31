@@ -38,6 +38,7 @@ import (
 	ccmtypes "github.com/Switcheo/polynetwork-cosmos/x/ccm/types"
 	headersynctypes "github.com/Switcheo/polynetwork-cosmos/x/headersync/types"
 
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/polynetwork/cosmos-relayer/context"
 	"github.com/polynetwork/cosmos-relayer/log"
 )
@@ -297,9 +298,9 @@ func sendCosmosTx(msgs []sdk.Msg) (res *tmcoretypes.ResultBroadcastTx, seq uint6
 
 	// First round: we gather all the signer infos. We use the "set empty
 	// signature" hack to do that.
-	signMode := ctx.Cosmos.TxConfig.SignModeHandler().DefaultMode()
+	// signMode := ctx.Cosmos.TxConfig.SignModeHandler().DefaultMode()
 	sigData := signingtypes.SingleSignatureData{
-		SignMode:  signMode,
+		SignMode:  signing.SignMode_SIGN_MODE_DIRECT,
 		Signature: nil,
 	}
 	sig := signingtypes.SignatureV2{
@@ -320,8 +321,13 @@ func sendCosmosTx(msgs []sdk.Msg) (res *tmcoretypes.ResultBroadcastTx, seq uint6
 	}
 
 	sig, err = clienttx.SignWithPrivKey(
-		signMode, signerData,
-		txBuilder, ctx.Cosmos.PrivKey, ctx.Cosmos.TxConfig, seq)
+		c.Background(),
+		signing.SignMode_SIGN_MODE_DIRECT,
+		signerData,
+		txBuilder,
+		ctx.Cosmos.PrivKey,
+		ctx.Cosmos.TxConfig,
+		seq)
 
 	if err != nil {
 		return
