@@ -170,7 +170,6 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20220721030215-126854af5e6d // indirect
 	github.com/tendermint/go-amino v0.16.0 // indirect
-	github.com/tendermint/tendermint v0.34.11 // indirect
 	github.com/tidwall/btree v1.7.0 // indirect
 	github.com/tyler-smith/go-bip39 v1.0.2 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
@@ -204,5 +203,5 @@ replace (
 	github.com/cosmos/cosmos-sdk => github.com/Switcheo/cosmos-sdk v0.0.0-20240319100129-57c031ac029c
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	github.com/ontio/ontology-crypto => github.com/ontio/ontology-crypto v1.2.1
-	github.com/polynetwork/poly => github.com/Switcheo/poly v0.0.0-20240320071901-20da7fb107cf
+	github.com/polynetwork/poly => github.com/Switcheo/poly v0.0.0-20240331041155-da957c17e8d8
 )
