@@ -18,25 +18,16 @@
 package context
 
 import (
-	"errors"
 	"fmt"
-	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/crypto/keys/mintkey"
-	"github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/auth"
-	"github.com/cosmos/cosmos-sdk/x/bank"
-	"github.com/polynetwork/cosmos-poly-module/btcx"
-	"github.com/polynetwork/cosmos-poly-module/ccm"
-	"github.com/polynetwork/cosmos-poly-module/ft"
-	"github.com/polynetwork/cosmos-poly-module/headersync"
-	"github.com/polynetwork/cosmos-poly-module/lockproxy"
-	"github.com/polynetwork/cosmos-relayer/log"
-	"github.com/polynetwork/poly-go-sdk"
-	crypto2 "github.com/tendermint/tendermint/crypto"
 	"io/ioutil"
+
+	"github.com/cosmos/cosmos-sdk/crypto"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	"github.com/cosmos/cosmos-sdk/types"
+	polysdk "github.com/polynetwork/poly-go-sdk"
 )
 
-func GetAccountByPassword(sdk *poly_go_sdk.PolySdk, path string, pwd []byte) (*poly_go_sdk.Account, error) {
+func GetAccountByPassword(sdk *polysdk.PolySdk, path string, pwd []byte) (*polysdk.Account, error) {
 	wallet, err := sdk.OpenWallet(path)
 	if err != nil {
 		return nil, fmt.Errorf("open wallet error: %v", err)
@@ -48,71 +39,29 @@ func GetAccountByPassword(sdk *poly_go_sdk.PolySdk, path string, pwd []byte) (*p
 	return user, nil
 }
 
-func GetCosmosPrivateKey(path string, pwd []byte) (crypto2.PrivKey, types.AccAddress, error) {
+func GetCosmosPrivateKey(path string, pwd []byte) (cryptotypes.PrivKey, types.AccAddress, error) {
 	bz, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, types.AccAddress{}, err
 	}
 
-	privKey, _, err := mintkey.UnarmorDecryptPrivKey(string(bz), string(pwd))
+	privKey, _, err := crypto.UnarmorDecryptPrivKey(string(bz), string(pwd))
 	if err != nil {
-		return nil, types.AccAddress{}, fmt.Errorf("failed to decrypt private key: v", err)
+		return nil, types.AccAddress{}, fmt.Errorf("failed to decrypt private key: %v", err)
 	}
 
 	return privKey, types.AccAddress(privKey.PubKey().Address().Bytes()), nil
 }
 
-func CalcCosmosFees(gasPrice types.DecCoins, gas uint64) (types.Coins, error) {
-	if gasPrice.IsZero() {
-		return types.Coins{}, errors.New("gas price is zero")
-	}
-	if gas == 0 {
-		return types.Coins{}, errors.New("gas is zero")
-	}
-	glDec := types.NewDec(int64(gas))
-	fees := make(types.Coins, len(gasPrice))
-	for i, gp := range gasPrice {
-		fee := gp.Amount.Mul(glDec)
-		fees[i] = types.NewCoin(gp.Denom, fee.Ceil().RoundInt())
-	}
-	return fees, nil
+func setCosmosConfig(addressPrefix string) {
+	config := types.GetConfig()
+	config.SetBech32PrefixForAccount(addressPrefix, addressPrefix+"pub")
+	config.SetBech32PrefixForValidator(addressPrefix+"valoper", addressPrefix+"valoperpub")
+	config.SetBech32PrefixForConsensusNode(addressPrefix+"valcons", addressPrefix+"valconspub")
+	config.Seal()
 }
 
-func NewCodecForRelayer() *codec.Codec {
-	cdc := codec.New()
-	bank.RegisterCodec(cdc)
-	types.RegisterCodec(cdc)
-	codec.RegisterCrypto(cdc)
-	auth.RegisterCodec(cdc)
-	btcx.RegisterCodec(cdc)
-	ccm.RegisterCodec(cdc)
-	ft.RegisterCodec(cdc)
-	headersync.RegisterCodec(cdc)
-	lockproxy.RegisterCodec(cdc)
-	return cdc
-}
-
-func setCosmosEnv(chainId string) {
-	switch chainId {
-	case "cc-cosmos":
-		return
-	case "switcheochain":
-		config := types.GetConfig()
-		config.SetBech32PrefixForAccount("swth", "swthpub")
-		config.SetBech32PrefixForValidator("swthvaloper", "swthvaloperpub")
-		config.SetBech32PrefixForConsensusNode("swthvalcons", "swthvalconspub")
-		config.Seal()
-	case "switcheo-tradehub-1":
-		config := types.GetConfig()
-		config.SetBech32PrefixForAccount("swth", "swthpub")
-		config.SetBech32PrefixForValidator("swthvaloper", "swthvaloperpub")
-		config.SetBech32PrefixForConsensusNode("swthvalcons", "swthvalconspub")
-	default:
-		log.Warnf("cosmos chain id not known %s, so use default settings", chainId)
-	}
-}
-
-func setUpPoly(poly *poly_go_sdk.PolySdk) error {
+func setUpPoly(poly *polysdk.PolySdk) error {
 	poly.NewRpcClient().SetAddress(RCtx.Conf.PolyRpcAddr)
 	hdr, err := poly.GetHeaderByHeight(0)
 	if err != nil {

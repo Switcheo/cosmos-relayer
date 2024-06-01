@@ -23,14 +23,17 @@ import (
 )
 
 type Conf struct {
+	CosmosGrpcAddr       string `json:"cosmos_grpc_addr"`
 	CosmosRpcAddr        string `json:"cosmos_rpc_addr"`
 	CosmosWallet         string `json:"cosmos_wallet"`
 	CosmosWalletPwd      string `json:"cosmos_wallet_pwd"`
 	CosmosStartHeight    int64  `json:"cosmos_start_height"`
 	CosmosListenInterval int    `json:"cosmos_listen_interval"`
 	CosmosChainId        string `json:"cosmos_chain_id"`
-	CosmosGasPrice       string `json:"cosmos_gas_price"`
-	CosmosGas            uint64 `json:"cosmos_gas"`
+	CosmosAddrPrefix     string `json:"cosmos_address_prefix"`
+	CosmosTxFee          string `json:"cosmos_tx_fee"`
+	CosmosGasLimit       uint64 `json:"cosmos_gas_limit"`
+	CosmosMaxBlockSync   int64  `json:"cosmos_max_block_sync"`
 
 	PolyRpcAddr        string `json:"poly_rpc_addr"`
 	PolyWallet         string `json:"poly_wallet"`

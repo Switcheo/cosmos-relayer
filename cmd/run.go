@@ -20,11 +20,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+
 	"github.com/polynetwork/cosmos-relayer/context"
 	"github.com/polynetwork/cosmos-relayer/log"
 	"github.com/polynetwork/cosmos-relayer/service"
 	"github.com/polynetwork/poly/common/password"
-	"os"
 )
 
 var (
@@ -49,6 +50,7 @@ func main() {
 	}
 
 	log.InitLog(conf.LogLevel, os.Stdout)
+	log.Tracef("Starting")
 
 	// If not set by flag, try to get pwd from configuration file.
 	if orcPwd != "" {
@@ -64,6 +66,7 @@ func main() {
 		conf.PolyWalletPwd = string(pwd)
 		fmt.Println("done")
 	}
+	log.Tracef("Loaded poly wallet")
 
 	if cosmosPwd != "" {
 		conf.CosmosWalletPwd = cosmosPwd
@@ -77,14 +80,16 @@ func main() {
 		conf.CosmosWalletPwd = string(pwd)
 		fmt.Println("done")
 	}
+	log.Tracef("Loaded cosmos wallet")
 
 	// all tools and info hold by context object.
 	if err = context.InitCtx(conf); err != nil {
 		log.Fatalf("failed to init context: %v", err)
 		panic(err)
 	}
+	defer context.RCtx.Cosmos.GrpcConn.Close()
 
-	log.Infof("using acc: (cosmos: %s, poly: %s)", context.RCtx.CMAcc.String(), context.RCtx.PolyAcc.Address.ToBase58())
+	log.Infof("using acc: (cosmos: %s, poly: %s)", context.RCtx.Cosmos.Address.String(), context.RCtx.PolyAcc.Address.ToBase58())
 
 	// start two services.
 	// listen service try to find cross-chain txs and headers.

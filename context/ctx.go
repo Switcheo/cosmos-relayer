@@ -18,20 +18,32 @@
 package context
 
 import (
+	"context"
 	"fmt"
+	"sync"
+
+	"google.golang.org/grpc"
+
+	sdkcli "github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
-	ctypes "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/auth"
-	"github.com/cosmos/cosmos-sdk/x/auth/exported"
-	"github.com/polynetwork/cosmos-relayer/db"
-	"github.com/polynetwork/poly-go-sdk"
-	"github.com/polynetwork/poly/core/types"
-	"github.com/polynetwork/poly/native/service/header_sync/cosmos"
-	tcrypto "github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/rpc/client"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	signingtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"
+	authtxtypes "github.com/cosmos/cosmos-sdk/x/auth/tx"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	rpctypes "github.com/tendermint/tendermint/rpc/core/types"
-	"sync"
+	tmtypes "github.com/tendermint/tendermint/types"
+
+	polysdk "github.com/polynetwork/poly-go-sdk"
+	"github.com/polynetwork/poly/core/types"
+
+	headersynctypes "github.com/Switcheo/polynetwork-cosmos/x/headersync/types"
+	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
+	"github.com/polynetwork/cosmos-relayer/db"
+	"github.com/polynetwork/cosmos-relayer/log"
 )
 
 type InfoType int
@@ -46,58 +58,76 @@ var (
 	RCtx = &Ctx{}
 )
 
-func InitCtx(conf *Conf) error {
-	var (
-		err         error
-		exportedAcc exported.Account
-		gasPrice    ctypes.DecCoins
-	)
+func NewCodecForRelayer() *codec.LegacyAmino {
+	cdc := codec.NewLegacyAmino()
+	headersynctypes.RegisterCodec(cdc)
+	cryptocodec.RegisterCrypto(cdc)
+	return cdc
+}
 
+func InitCtx(conf *Conf) (err error) {
 	RCtx.Conf = conf
-	setCosmosEnv(conf.CosmosChainId)
+	setCosmosConfig(conf.CosmosAddrPrefix)
 
 	// channels
 	RCtx.ToCosmos = make(chan *PolyInfo, ChanBufSize)
 	RCtx.ToPoly = make(chan *CosmosInfo, ChanBufSize)
 
-	// prepare COSMOS staff
-	RCtx.CMRpcCli, err = rpchttp.New(conf.CosmosRpcAddr, "/websocket")
-	if err != nil {
-		return fmt.Errorf("failed to new Tendermint Cli: %v", err)
+	// legacy cdc
+	RCtx.Cosmos.Cdc = NewCodecForRelayer()
+
+	// init http rpc client for tendermint for unmigrated stuff
+	if RCtx.Cosmos.RpcClient, err = rpchttp.New(conf.CosmosRpcAddr, "/websocket"); err != nil {
+		return fmt.Errorf("failed to init rpc client: %v", err)
 	}
-	if RCtx.CMPrivk, RCtx.CMAcc, err = GetCosmosPrivateKey(conf.CosmosWallet, []byte(conf.CosmosWalletPwd)); err != nil {
+	log.Tracef("rpc client initalized")
+
+	// init grpc connection for cosmos-sdk
+	if RCtx.Cosmos.GrpcConn, err = GetGRPCConnection(conf.CosmosGrpcAddr); err != nil {
+		return fmt.Errorf("failed to init grpc connection: %v", err)
+	}
+	log.Tracef("grpc conn initalized")
+
+	// init tx config for signing txs
+	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	// Choose codec: Amino or Protobuf. Here, we use Protobuf
+	protoCodec := codec.NewProtoCodec(interfaceRegistry)
+	RCtx.Cosmos.TxConfig = authtxtypes.NewTxConfig(protoCodec, []signingtypes.SignMode{signingtypes.SignMode_SIGN_MODE_DIRECT})
+
+	// init broadcaster key
+	if RCtx.Cosmos.PrivKey, RCtx.Cosmos.Address, err = GetCosmosPrivateKey(conf.CosmosWallet, []byte(conf.CosmosWalletPwd)); err != nil {
 		return err
 	}
-	RCtx.CMCdc = NewCodecForRelayer()
-	rawParam, err := RCtx.CMCdc.MarshalJSON(auth.NewQueryAccountParams(RCtx.CMAcc))
+
+	// check account
+	authclient := authtypes.NewQueryClient(RCtx.Cosmos.GrpcConn)
+	accountRes, err := authclient.Account(
+		context.Background(),
+		&authtypes.QueryAccountRequest{
+			Address: RCtx.Cosmos.Address.String(),
+		},
+	)
 	if err != nil {
 		return err
 	}
-	res, err := RCtx.CMRpcCli.ABCIQueryWithOptions(QueryAccPath, rawParam, client.ABCIQueryOptions{Prove: true})
+	log.Tracef("query")
+	ba := authtypes.BaseAccount{}
+	err = ba.Unmarshal(accountRes.Account.Value)
 	if err != nil {
 		return err
 	}
-	if !res.Response.IsOK() {
-		return fmt.Errorf("failed to get response for accout-query: %v", res.Response)
-	}
-	if err := RCtx.CMCdc.UnmarshalJSON(res.Response.Value, &exportedAcc); err != nil {
-		return fmt.Errorf("unmarshal query-account-resp failed, err: %v", err)
-	}
-	RCtx.CMSeq = &CosmosSeq{
+
+	// get account sequence
+	RCtx.Cosmos.Sequence = &CosmosSeq{
 		lock: sync.Mutex{},
-		val:  exportedAcc.GetSequence(),
+		val:  ba.GetSequence(),
 	}
-	RCtx.CMAccNum = exportedAcc.GetAccountNumber()
-	if gasPrice, err = ctypes.ParseDecCoins(conf.CosmosGasPrice); err != nil {
-		return err
-	}
-	if RCtx.CMFees, err = CalcCosmosFees(gasPrice, conf.CosmosGas); err != nil {
-		return err
-	}
-	RCtx.CMGas = conf.CosmosGas
+	RCtx.Cosmos.AccountNumber = ba.GetAccountNumber()
+
+	// set tx prices
 
 	// prepare Poly staff
-	RCtx.Poly = poly_go_sdk.NewPolySdk()
+	RCtx.Poly = polysdk.NewPolySdk()
 	if err := setUpPoly(RCtx.Poly); err != nil {
 		return err
 	}
@@ -105,7 +135,7 @@ func InitCtx(conf *Conf) error {
 		return err
 	}
 
-	RCtx.Db, err = db.NewDatabase(conf.DBPath, RCtx.CMCdc)
+	RCtx.Db, err = db.NewDatabase(conf.DBPath)
 	if err != nil {
 		return err
 	}
@@ -120,6 +150,16 @@ func InitCtx(conf *Conf) error {
 	return nil
 }
 
+type Cosmos struct {
+	Cdc           *codec.LegacyAmino
+	TxConfig      sdkcli.TxConfig
+	RpcClient     *rpchttp.HTTP
+	GrpcConn      *grpc.ClientConn // to build sdk grpc clients for sdk queries
+	PrivKey       cryptotypes.PrivKey
+	Address       sdk.AccAddress
+	Sequence      *CosmosSeq
+	AccountNumber uint64
+}
 type Ctx struct {
 	// configuration
 	Conf *Conf
@@ -129,18 +169,11 @@ type Ctx struct {
 	ToPoly   chan *CosmosInfo
 
 	// Cosmos
-	CMRpcCli *rpchttp.HTTP
-	CMPrivk  tcrypto.PrivKey
-	CMAcc    ctypes.AccAddress
-	CMSeq    *CosmosSeq
-	CMAccNum uint64
-	CMFees   ctypes.Coins
-	CMGas    uint64
-	CMCdc    *codec.Codec
+	Cosmos Cosmos
 
 	// Poly chain
-	Poly    *poly_go_sdk.PolySdk
-	PolyAcc *poly_go_sdk.Account
+	Poly    *polysdk.PolySdk
+	PolyAcc *polysdk.Account
 
 	// DB
 	Db *db.Database
@@ -148,6 +181,19 @@ type Ctx struct {
 	// status for relayed tx
 	CMStatus   *CosmosStatus
 	PolyStatus *PolyStatus
+}
+
+func (c *Ctx) NewTxBuilder() sdkcli.TxBuilder {
+	// Set other tx details
+	txBuilder := c.Cosmos.TxConfig.NewTxBuilder()
+	fee, err := sdk.ParseCoinsNormalized(c.Conf.CosmosTxFee)
+	if err != nil {
+		panic(err)
+	}
+	txBuilder.SetFeeAmount(fee)
+	txBuilder.SetTimeoutHeight(18446744073709551615) // XXX: TODO
+	txBuilder.SetGasLimit(c.Conf.CosmosGasLimit)
+	return txBuilder
 }
 
 type PolyInfo struct {
@@ -179,6 +225,19 @@ type PolyTx struct {
 	FromChainId uint64
 }
 
+type CosmosHeader struct {
+	Header  tmtypes.Header
+	Commit  *tmtypes.Commit
+	Valsets []*CosmosValidator
+}
+
+type CosmosValidator struct {
+	Address          tmtypes.Address    `json:"address"`
+	PubKey           cryptotypes.PubKey `json:"pub_key"`
+	VotingPower      int64              `json:"voting_power"`
+	ProposerPriority int64              `json:"proposer_priority"`
+}
+
 type CosmosInfo struct {
 	// type 1 means header and tx; type 2 means only header;
 	Type InfoType
@@ -190,7 +249,7 @@ type CosmosInfo struct {
 	Tx *CosmosTx
 
 	// header part
-	Hdrs []*cosmos.CosmosHeader
+	Hdrs []*CosmosHeader
 }
 
 type CosmosTx struct {
@@ -212,4 +271,23 @@ func (seq *CosmosSeq) GetAndAdd() uint64 {
 		seq.lock.Unlock()
 	}()
 	return seq.val
+}
+
+// GetGRPCConnection Obtains a gRPC connection
+// CONTRACT: should always close the connection after using: defer grpcConn.Close()
+// Example:
+// grpcConn, _ := getGRPCConnection("127.0.0.1:9090")
+// defer grpcConn.Close()
+func GetGRPCConnection(targetGRPCAddress string) (*grpc.ClientConn, error) {
+	// log.Info("Obtaining gRPC connection from: ", targetGRPCAddress)
+	// Create a connection to the gRPC server.
+	grpcConn, err := grpc.Dial(
+		targetGRPCAddress,   // your gRPC server address.
+		grpc.WithInsecure(), // The SDK doesn't support any transport security mechanism.
+	)
+	if err != nil {
+		log.Error("Failed to obtain gRPC connection from: ", targetGRPCAddress)
+		return nil, err
+	}
+	return grpcConn, nil
 }
